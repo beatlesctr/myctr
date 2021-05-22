@@ -1,0 +1,7 @@
+{
+ "dense_feat_col_name": [],
+ "sparce_feat_col_name": ["UserID","MovieID","Timestamp","Gender","Age","Occupation","Zip-code","Title","Genres1","Genres2","Genres3"],
+ "label_col_name": ["Rating"],
+ "train_sample_num": 100000,
+ "test_sample_num": 10000
+}

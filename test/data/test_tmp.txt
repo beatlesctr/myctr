@@ -1,0 +1,5 @@
+UserID:MovieID:Rating:Timestamp:Gender:Age:Occupation:Zip-code:Title:Genres1:Genres2:Genres3
+23:2419:2:978133428:M:35:0:90049:Extremities (1986):Drama:Thriller:None
+23:196:4:978133428:M:35:0:90049:Species (1995):Horror:Sci-Fi:None
+23:908:3:978133428:M:35:0:90049:North by Northwest (1959):Drama:Thriller:None
+25:157:3:978133433:M:18:4:01609:Canadian Bacon (1994):Comedy:War:None

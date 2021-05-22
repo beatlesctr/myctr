@@ -1,0 +1,9 @@
+{
+  "emb_size":6,
+  "dense_feat_num":2,
+  "sparse_feat_space_cfg":[10, 10, 10, 10],
+  "cross_layer_num":3,
+  "dnn_layer_cfg":[12, 6],
+  "label_num":5,
+  "dropout_prob":0.1
+}
