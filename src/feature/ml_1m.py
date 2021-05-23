@@ -14,6 +14,7 @@ class Example:
         self.dense_feat = dense_feat
         self.y_label = y_label
 
+
 class ML1MConfig(object):
     """Configuration for `TransformerModel`."""
 
@@ -23,13 +24,17 @@ class ML1MConfig(object):
                                        'Gender','Age','Occupation',
                                        'Zip-code','Title','Genres1',
                                        'Genres2','Genres3'],
+                 sparse_feat_space_cfg=[6040, 3706, 2, 7, 21, 3439, 3706, 18, 18, 18],
                  label_col_name=['Rating'],
+                 label_num=2,
                  train_sample_num=102400,
                  test_sample_num=10240
                  ):
         self.dense_feat_col_name = dense_feat_col_name
         self.sparce_feat_col_name = sparce_feat_col_name
+        self.sparse_feat_space_cfg = sparse_feat_space_cfg
         self.label_col_name = label_col_name
+        self.label_num = label_num
         self.train_sample_num = train_sample_num
         self.test_sample_num = test_sample_num
 
@@ -59,7 +64,7 @@ class ML1MConfig(object):
 
 
 class DataProcessor(object):
-    """Base class for data converters for sequence classification data sets."""
+    """Base class for dat converters for sequence classification dat sets."""
 
     def __init__(self, feat_cfg):
 
@@ -83,7 +88,7 @@ class DataProcessor(object):
 
 
     def get_labels(self):
-        """Gets the list of labels for this data set."""
+        """Gets the list of labels for this dat set."""
         raise NotImplementedError()
 
     def _read_txt_as_dataframe(self, input_files):
@@ -189,7 +194,6 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat):
 
     def input_fn(params):
 
-        batch_size = params['batch_size']
         if is_training:
             d = tf.data.Dataset.from_tensor_slices(tf.constant(input_files))
             d = d.repeat()
@@ -203,8 +207,11 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat):
                 )
             )
             d = d.shuffle(buffer_size=1024000)
+
+            batch_size = params['train_batch_size']
         else:
             d = tf.data.TFRecordDataset(filenames=input_files)
+            batch_size = params['eval_or_predict_batch_size']
         d = d.apply(
             tf.contrib.data.map_and_batch(
                 lambda record: _decode_record(record, name_to_feature_sd if has_dense_feat else name_to_feature_s),

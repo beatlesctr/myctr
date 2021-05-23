@@ -2,47 +2,57 @@
 import tensorflow as tf
 import os
 
-from feature.ml_1m import file_based_input_fn_builder, ML1MConfig, DataProcessor, \
-    file_based_convert_examples_to_features
+from feature.ml_1m import ML1MConfig, DataProcessor, \
+    file_based_convert_examples_to_features, file_based_input_fn_builder
 from flag_center import FLAGS
 from model.dcn import DCN, DCNConfig
 
 
 def noam_scheme(init_lr, global_step):
 
-    step = tf.cast(global_step + 1, dtype=tf.float32)
+    #step = tf.cast(global_step + 1, dtype=tf.float32)
     return init_lr
 
 
 def create_train_opt(loss, init_lr=0.001):
-    global_steps_ = tf.train.get_or_create_global_step()
-    global_step = tf.cast(x=global_steps_, dtype=tf.float32)
+
+    global_step = tf.train.get_or_create_global_step()
+    global_step = tf.cast(x=global_step, dtype=tf.float32)
     learning_rate = noam_scheme(init_lr=init_lr, global_step=global_step)
     optimizer = tf.train.AdamOptimizer(learning_rate)
-    train_op = optimizer.minimize(loss=loss, global_step=global_steps_)
-    tf.summary.scalar('learning_rate', learning_rate)
-    summaries = tf.summary.merge_all()
+    train_op = optimizer.minimize(loss=loss, global_step=global_step)
     return train_op, learning_rate
 
 
 def my_model_fn(features, labels, mode, params):
 
-    config = params['config']
+    model_config = params['model_config']
+    feat_config = params['feature_config']
     init_lr = params['init_lr']
 
-    dense_feat, sparse_feat = features
+    if type(features) == tf.Tensor:
+        sparse_feat = features
+        dense_feat = None
+    else:
+        sparse_feat, dense_feat = features
     y_label = labels
 
-    dcn = DCN(mode=mode, config=config)
+    dcn = DCN(mode=mode, model_config=model_config, feat_config=feat_config)
     logits, probs = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
-    loss = dcn.calculate_loss(logits=logits, y_labels=y_label)
+    loss = DCN.calculate_loss(logits=logits, y_labels=y_label)
 
     for v in tf.trainable_variables():
         tf.logging.info(v.name)
 
+    tf.summary.scalar('loss', loss)
+    '''
+    可以通过summary 来看看参数训练过程中的数据分布
+    '''
+    tf.summary.merge_all()
+
     if mode == tf.estimator.ModeKeys.TRAIN:
         '''
-        训练rnn 模型的时候推荐的方法
+        模型训练
         '''
         train_op, learning_rate = create_train_opt(loss=loss, init_lr=init_lr)
         hook_dict = {
@@ -60,14 +70,40 @@ def my_model_fn(features, labels, mode, params):
             train_op=train_op)
 
     elif mode == tf.estimator.ModeKeys.EVAL:
+        '''
+        模型评估
+        '''
+        metrics = {
+            'auc': tf.metrics.auc(
+                labels=tf.cast(x=labels, dtype=tf.bool),
+                predictions=probs[:, 1],
+                name='auc',
+                num_thresholds=2000
+            )
+        }
 
         return tf.estimator.EstimatorSpec(
             mode=mode,
-            predictions={'prediction': probs}
+            eval_metric_ops=metrics,
+            loss=loss
+        )
+
+    elif mode == tf.estimator.ModeKeys.PREDICT:
+        '''
+        模型预测
+        '''
+        export_outputs = {
+            'y': tf.estimator.export.PredictOutput(
+                {"predict": probs}
+            )
+        }
+        return tf.estimator.EstimatorSpec(
+            mode=mode,
+            predictions={'predict': probs[:, 1]},
+            export_outputs=export_outputs
         )
 
     else:
-
         raise NotImplementedError('not implemented')
 
 
@@ -79,9 +115,9 @@ def convert_feature_from_txt_to_tfrecord(data_dir, feature_config, feature_type=
     input_files = list()
     for root, ds, fs in os.walk(data_dir):
         for f in fs:
-            if f.startswith(prefix=feature_type) and f.endswith(suffix='txt'):
-                input_files.append(f)
-    examples = data_processor.get_train_examples(data_dir=input_files)
+            if f.startswith(feature_type) and f.endswith('txt'):
+                input_files.append(os.path.join(data_dir, f))
+    examples = data_processor.get_train_examples(input_files=input_files)
     file_based_convert_examples_to_features(examples=examples, output_dir=data_dir, feature_type=feature_type)
 
 
@@ -92,9 +128,9 @@ def get_tfrecord_filelist_from_dir(data_dir, has_dense_feat, feature_type='train
     input_files = list()
     for root, ds, fs in os.walk(data_dir):
         for f in fs:
-            if f.startswith(prefix=feature_type) and f.endswith(suffix='tfrecord'):
-                input_files.append(f)
-    train_input_fn = file_based_input_fn_builder(input_files=[], is_training=True,
+            if f.startswith(feature_type) and f.endswith('tfrecord'):
+                input_files.append(os.path.join(data_dir,f))
+    train_input_fn = file_based_input_fn_builder(input_files=input_files, is_training=True,
                                                  has_dense_feat=has_dense_feat)
     return train_input_fn
 
@@ -102,17 +138,21 @@ def get_tfrecord_filelist_from_dir(data_dir, has_dense_feat, feature_type='train
 def main(unused_params):
     # 加载配置
     feature_config = ML1MConfig.from_json_file(json_file=os.path.join(FLAGS.feature_dir, 'config.json'))
-    model_config = DCNConfig.from_json_file(FLAGS.model_config)
+    model_config = DCNConfig.from_json_file(FLAGS.model_config_file)
     tf.logging.info(model_config.to_json_string())
     tf.logging.info(feature_config.to_json_string())
+
     # 处理特征
     if FLAGS.mk_feature:
+
         convert_feature_from_txt_to_tfrecord(data_dir=FLAGS.feature_dir,
                                              feature_config=feature_config,
                                              feature_type='train')
+
         convert_feature_from_txt_to_tfrecord(data_dir=FLAGS.feature_dir,
                                              feature_config=feature_config,
                                              feature_type='eval')
+
     # 构造评估器
     train_step_num = int(feature_config.train_sample_num * FLAGS.epoch_num / FLAGS.batch_size)
     eval_step_num = int(feature_config.test_sample_num / FLAGS.batch_size)
@@ -120,14 +160,11 @@ def main(unused_params):
                                         save_checkpoints_steps=FLAGS.save_checkpoint_steps,
                                         keep_checkpoint_max=FLAGS.keep_checkpoint_max)
     params = {
-        'train_step_num': train_step_num,
-        'eval_step_num': eval_step_num,
-        'epoch_num': FLAGS.epoch_num,
         'model_config': model_config,
         'feature_config': feature_config,
         'init_lr': FLAGS.init_lr,
         'train_batch_size': FLAGS.batch_size,
-        'predict_batch_size': FLAGS.batch_size
+        'eval_or_predict_batch_size': FLAGS.batch_size
     }
 
     estimator = tf.estimator.Estimator(model_dir=FLAGS.model_dir,
@@ -150,12 +187,13 @@ def main(unused_params):
         train_steps=train_step_num,
         eval_steps=eval_step_num,
         min_eval_frequency=FLAGS.save_checkpoint_steps
-        #train_monitors=[train_input_hook],  # Hooks for training
-        #eval_hooks=[eval_input_hook],  # Hooks for evaluation
+        #train_monitors=[train_input_hook],
+        #eval_hooks=[eval_input_hook]
     )
-    experiment.train_and_eval()
+    experiment.train_and_evaluate()
 
 
 if __name__ == '''__main__''':
+
     tf.logging.set_verbosity(tf.logging.INFO)
     tf.app.run()

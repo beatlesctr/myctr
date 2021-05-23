@@ -9,7 +9,7 @@ class DataProcessorTest:
         self._inst = DataProcessor(feat_cfg=feat_cfg)
 
     def test_get_train_examples(self):
-        data_dir = ['.\\dat\\ml-1m\\test.txt']
+        data_dir = ['.\\dat\\ml-1m\\eval.txt']
         tmp = self._inst.get_train_examples(data_dir=data_dir)
         for ele in tmp[:100]:
             print(ele)
@@ -18,11 +18,11 @@ class DataProcessorTest:
     def test_file_based_convert_examples_to_features(self):
         examples = self.test_get_train_examples()
         file_based_convert_examples_to_features(examples=examples,
-                                                output_dir=".\\test\\tmp_output\\tf\\")
+                                                output_dir=".\\test\\out\\tf\\")
 
     def test_file_based_input_fn_builder(self):
-        input_files = [".\\test\\tmp_output\\tf\\0.tfrecord",
-                      ".\\test\\tmp_output\\tf\\100000.tfrecord"]
+        input_files = [".\\test\\out\\tf\\0.tfrecord",
+                      ".\\test\\out\\tf\\100000.tfrecord"]
         input_fn = file_based_input_fn_builder(input_files=input_files,
                                                is_training=True, has_dense_feat=False)
         d = input_fn(params={"batch_size": 2})
