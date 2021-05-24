@@ -56,7 +56,7 @@ class DCN:
         self._dense_feat_num = len(self._feat_config.dense_feat_col_name)
         self._sparse_feat_space_size = sum(self._feat_config.sparse_feat_space_cfg)
 
-        sparse_feat_steps = [0 for ele in range(self._feat_config.sparse_feat_space_cfg)]
+        sparse_feat_steps = [0 for ele in self._feat_config.sparse_feat_space_cfg]
         for i in range(1, len(self._feat_config.sparse_feat_space_cfg), 1):
             sparse_feat_steps[i] = sparse_feat_steps[i-1] + self._feat_config.sparse_feat_space_cfg[i]
         self._sparse_feat_steps = tf.constant(value=sparse_feat_steps, dtype=tf.int32, name='sparse_feat_steps')
