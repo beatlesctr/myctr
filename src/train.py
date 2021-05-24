@@ -28,6 +28,7 @@ def my_model_fn(features, labels, mode, params):
 
     model_config = params['model_config']
     feat_config = params['feature_config']
+
     init_lr = params['init_lr']
 
     if type(features) == tf.Tensor:
