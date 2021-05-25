@@ -1,6 +1,6 @@
 {
   "emb_size":6,
-  "cross_layer_num":3,
-  "dnn_layer_cfg":[12, 6],
-  "dropout_prob":0.1
+  "cross_layer_num":2,
+  "dnn_layer_cfg":[256, 256, 256],
+  "dropout_prob":0.0
 }
