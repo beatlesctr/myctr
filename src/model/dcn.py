@@ -56,7 +56,7 @@ class DCN:
         self._dense_feat_num = len(self._feat_config.dense_feat_col_name)
         self._sparse_feat_space_size = sum(self._feat_config.sparse_feat_space_cfg)
 
-        sparse_feat_steps = [0 for ele in range(self._feat_config.sparse_feat_space_cfg)]
+        sparse_feat_steps = [0 for ele in self._feat_config.sparse_feat_space_cfg]
         for i in range(1, len(self._feat_config.sparse_feat_space_cfg), 1):
             sparse_feat_steps[i] = sparse_feat_steps[i-1] + self._feat_config.sparse_feat_space_cfg[i]
         self._sparse_feat_steps = tf.constant(value=sparse_feat_steps, dtype=tf.int32, name='sparse_feat_steps')
@@ -64,11 +64,12 @@ class DCN:
     def __sparse_feature_preprocess(self, sparse_feat):
         input_tmp = list()
         for i in range(len(self._feat_config.sparse_feat_space_cfg)):
-            feat = tf.string_to_hash_bucket_fast(
-                sparse_feat[:, i*self._model_config.emb_size : (i+1)*self._model_config.emb_size]
-            ) + self._sparse_feat_steps[i]
+            feat = tf.to_int32(tf.string_to_hash_bucket_fast(
+                input=sparse_feat[:, i],
+                num_buckets=self._feat_config.sparse_feat_space_cfg[i]
+            )) + self._sparse_feat_steps[i]
             input_tmp.append(feat)
-        sparse_feat = tf.concat(values=input_tmp, axis=-1)
+        sparse_feat = tf.transpose(a=tf.stack(values=input_tmp, axis=0), perm=[1,0])
         return sparse_feat
 
     def __embedding_layer(self, dense_feat, sparse_feat):
@@ -88,11 +89,13 @@ class DCN:
         sparse_feat_emb = tf.nn.embedding_lookup(params=emb_matrix_s, ids=sparse_feat)
         # B x (Ns*E)
         sparse_feat_emb = tf.reshape(tensor=sparse_feat_emb,
-                                     shape=[-1, self._sparse_feat_num * self._config.emb_size])
+                                     shape=[-1, self._sparse_feat_num * self._model_config.emb_size])
 
         # 构造 dnn layer 的输入
         if dense_feat is not None:
             feat_emb = tf.concat(values=[sparse_feat_emb, dense_feat], axis=-1)
+        else:
+            feat_emb = sparse_feat_emb
         # B x (Ns*E+Nd)
         feat_emb = tf.reshape(tensor=feat_emb,
                          shape=[-1, (self._sparse_feat_num*self._model_config.emb_size + self._dense_feat_num)])
@@ -131,22 +134,30 @@ class DCN:
 
     @staticmethod
     def calculate_loss(logits, labels):
-
+        y_label = tf.squeeze(input=labels, axis=-1)
+        y_probs = tf.nn.softmax(logits=logits, axis=-1)
+        loss_m = -1.0 * tf.log(y_probs + 1.0e-8) * tf.one_hot(indices=y_label, depth=2)
+        # loss_m = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=y_probs, labels=y_label)
+        loss_sum = tf.reduce_sum(input_tensor=loss_m, axis=-1)
+        loss_per_sample = tf.reduce_mean(input_tensor=loss_sum)
+        '''
+        labels = tf.squeeze(input=labels, axis=-1)
         batch_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
         loss_per_sample = tf.reduce_mean(input_tensor=batch_loss, axis=-1, keep_dims=False)
+        '''
         return loss_per_sample
 
     def create_model(self, dense_feat, sparse_feat):
-
+        sparse_feat_ = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
         l_sparce_0, l_0_all = self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
         l_n = self.__cross_layer(l_0=l_sparce_0)
         y = self.__dnn_layer(l_0_all=l_0_all)
         tmp = tf.concat(values=[l_n, y], axis=-1)
-
-        logits = tf.layers.dense(inputs=tmp, units=self._model_config.label_num) # 最后是二分类
+        tmp = l_n
+        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num) # 最后是二分类
         probs = tf.nn.softmax(logits=logits, axis=-1)
 
-        return logits, probs
+        return logits, probs, sparse_feat_
 
     '''
     test interfaces

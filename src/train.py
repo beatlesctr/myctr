@@ -17,11 +17,10 @@ def noam_scheme(init_lr, global_step):
 def create_train_opt(loss, init_lr=0.001):
 
     global_step = tf.train.get_or_create_global_step()
-    global_step = tf.cast(x=global_step, dtype=tf.float32)
     learning_rate = noam_scheme(init_lr=init_lr, global_step=global_step)
     optimizer = tf.train.AdamOptimizer(learning_rate)
     train_op = optimizer.minimize(loss=loss, global_step=global_step)
-    return train_op, learning_rate
+    return train_op, global_step
 
 
 def my_model_fn(features, labels, mode, params):
@@ -38,14 +37,16 @@ def my_model_fn(features, labels, mode, params):
         sparse_feat, dense_feat = features
     y_label = labels
 
+
     dcn = DCN(mode=mode, model_config=model_config, feat_config=feat_config)
-    logits, probs = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
-    loss = DCN.calculate_loss(logits=logits, y_labels=y_label)
+    logits, probs, sparse_ = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
+    loss = DCN.calculate_loss(logits=logits, labels=y_label)
 
     for v in tf.trainable_variables():
         tf.logging.info(v.name)
 
     tf.summary.scalar('loss', loss)
+
     '''
     可以通过summary 来看看参数训练过程中的数据分布
     '''
@@ -55,14 +56,16 @@ def my_model_fn(features, labels, mode, params):
         '''
         模型训练
         '''
-        train_op, learning_rate = create_train_opt(loss=loss, init_lr=init_lr)
+        train_op, global_step = create_train_opt(loss=loss, init_lr=init_lr)
         hook_dict = {
             'loss': loss,
-            'learning_rate': learning_rate,
+            'step': global_step,
+            #'sparse': sparse_,
+            #'sparse_ori': sparse_feat
         }
         hook = tf.train.LoggingTensorHook(
             hook_dict,
-            every_n_iter=10
+            every_n_iter=1000,
         )
         return tf.estimator.EstimatorSpec(
             mode=mode,

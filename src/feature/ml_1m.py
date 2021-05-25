@@ -20,7 +20,7 @@ class ML1MConfig(object):
 
     def __init__(self,
                  dense_feat_col_name=[''],
-                 sparce_feat_col_name=['UserID','MovieID','Timestamp',
+                 sparce_feat_col_name=['UserID','MovieID',
                                        'Gender','Age','Occupation',
                                        'Zip-code','Title','Genres1',
                                        'Genres2','Genres3'],
@@ -99,7 +99,7 @@ class DataProcessor(object):
         dataframe = pd.concat(df_list)
         sparse_feats = dataframe[self._feat_cfg.sparce_feat_col_name]
         dense_feats = None
-        if len(self._feat_cfg.dense_feat_col_name) == 0:
+        if len(self._feat_cfg.dense_feat_col_name) != 0:
             dense_feats = dataframe[self._feat_cfg.dense_feat_col_name]
         y_labels = dataframe[self._feat_cfg.label_col_name]
 
@@ -180,6 +180,7 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat):
         for name in list(example.keys()):
             t = example[name]
             if t.dtype == tf.int64:
+                t = tf.sparse_tensor_to_dense(t, default_value=1)
                 t = tf.to_int32(t)
             if t.dtype == tf.string:
                 t = tf.sparse_tensor_to_dense(t, default_value='')
@@ -189,8 +190,8 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat):
             example[name] = t
 
         if 'dense_feature' in name_to_feature.keys():
-            return (example['sparse_feature'], example['dense_feature']), (example['y_label'])
-        return (example['sparse_feature']), (example['y_label'])
+            return (example['sparse_feature'], example['dense_feature']), example['y_label']
+        return (example['sparse_feature']), example['y_label']
 
     def input_fn(params):
 
