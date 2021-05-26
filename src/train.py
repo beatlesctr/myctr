@@ -26,6 +26,7 @@ def create_train_opt(loss, init_lr=0.001):
 def my_model_fn(features, labels, mode, params):
 
     model_config = params['model_config']
+
     feat_config = params['feature_config']
 
     init_lr = params['init_lr']
@@ -169,6 +170,7 @@ def main(unused_params):
         'init_lr': FLAGS.init_lr,
         'train_batch_size': FLAGS.batch_size,
         'eval_or_predict_batch_size': FLAGS.batch_size
+
     }
 
     estimator = tf.estimator.Estimator(model_dir=FLAGS.model_dir,
