@@ -4,25 +4,25 @@ import json
 import six
 import tensorflow as tf
 
-
-class DCNConfig(object):
+class DeepFMConfig(object):
     """Configuration for `TransformerModel`."""
 
     def __init__(self,
                  emb_size=12,
-                 cross_layer_num=3,
+                 #cross_layer_num=3,
                  dnn_layer_cfg=[128, 64],
-                 dropout_prob=0.1):
+                 dropout_prob=0.1
+                 ):
 
         self.emb_size = emb_size,
-        self.cross_layer_num = cross_layer_num,
+        #self.cross_layer_num = cross_layer_num,
         self.dnn_layer_cfg = dnn_layer_cfg,
         self.dropout_prob = dropout_prob
 
     @classmethod
     def from_dict(cls, json_object):
         """Constructs a `TransformerConfig` from a Python dictionary of parameters."""
-        config = DCNConfig()
+        config = DeepFMConfig()
         for (key, value) in six.iteritems(json_object):
             config.__dict__[key] = value
         return config
@@ -44,7 +44,8 @@ class DCNConfig(object):
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
 
-class DCN:
+class DeepFM:
+
 
     def __init__(self, mode, model_config, feat_config):
 
@@ -82,42 +83,39 @@ class DCN:
         # 构造 cross layer 的输入
         # B x N x E
 
-        sparse_feat = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
+        #sparse_feat = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
         emb_matrix_s = tf.get_variable(name="emb_s",
                                        dtype=tf.float32,
                                        shape=[self._sparse_feat_space_size, self._model_config.emb_size],
                                        initializer=tf.truncated_normal_initializer(stddev=0.02))
         sparse_feat_emb = tf.nn.embedding_lookup(params=emb_matrix_s, ids=sparse_feat)
-        # B x (Ns*E)
-        sparse_feat_emb = tf.reshape(tensor=sparse_feat_emb,
-                                     shape=[-1, self._sparse_feat_num * self._model_config.emb_size])
+
+
 
         # 构造 dnn layer 的输入
         if dense_feat is not None:
-            feat_emb = tf.concat(values=[sparse_feat_emb, dense_feat], axis=-1)
+            sparse_feat_emb_tmp = tf.reshape(tensor=sparse_feat_emb,
+                                         shape=[-1, self._sparse_feat_num*self._model_config.emb_size])
+            feat_emb = tf.concat(values=[sparse_feat_emb_tmp, dense_feat], axis=-1)
         else:
-            feat_emb = sparse_feat_emb
+            feat_emb = tf.reshape(tensor=sparse_feat_emb,
+                                shape=[-1, self._sparse_feat_num*self._model_config.emb_size])
         # B x (Ns*E+Nd)
         feat_emb = tf.reshape(tensor=feat_emb,
                          shape=[-1, (self._sparse_feat_num*self._model_config.emb_size + self._dense_feat_num)])
         return sparse_feat_emb, feat_emb
 
-    def __cross_layer(self, l_0):
+    def __fm_layer(self, l_0):
         '''
-        :param l_0: B x Ns x 1
-        :return: B x Ns
+        sparse_feat: B x Ns x E
         '''
-        # cross 网络
-        l_0 = tf.expand_dims(input=l_0, axis=-1)
-        l_n = l_0 # B x Ns x 1
-        for i in range(1, self._model_config.cross_layer_num):
-
-            W = tf.get_variable(name="layer-weight-"+str(i), shape=[self._sparse_feat_num*self._model_config.emb_size, 1])
-            b = tf.get_variable(name="layer-bias-"+str(i), shape=[self._sparse_feat_num*self._model_config.emb_size, 1])
-            tmp = tf.einsum("bik, kj->bij", tf.transpose(a=l_n, perm=[0, 2, 1]), W) # B x 1 x 1
-            l_n = tf.matmul(a=l_0, b=tmp) + b + l_n
-
-        return tf.squeeze(input=l_n, axis=[-1])
+        # B x E
+        first_order = tf.reduce_sum(input_tensor=l_0, axis=1, keep_dims=False)
+        second_order = tf.square(x=first_order) \
+                       - tf.reduce_sum(input_tensor=tf.square(x=l_0), axis=1, keep_dims=False)
+        bias = tf.get_variable(name="bias", shape=[1, self._model_config.emb_size])
+        fm = first_order + 0.5 * second_order + bias
+        return fm
 
     def __dnn_layer(self, l_0_all):
         '''
@@ -132,6 +130,18 @@ class DCN:
             y = tf.nn.dropout(x=y, keep_prob=keep_prob)
         l_n_all = y
         return l_n_all
+
+    def create_model(self, sparse_feat, dense_feat):
+
+        sparse_feat_ = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
+        l_sparce_0, l_0_all = self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat_)
+        l_n = self.__fm_layer(l_0=l_sparce_0)
+        y = self.__dnn_layer(l_0_all=l_0_all)
+        tmp = tf.concat(values=[l_n, y], axis=-1)
+        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num)  # 最后是二分类
+        probs = tf.nn.softmax(logits=logits, axis=-1)
+
+        return logits, probs
 
     @staticmethod
     def calculate_loss(logits, labels):
@@ -148,28 +158,20 @@ class DCN:
         '''
         return loss_per_sample
 
-    def create_model(self, dense_feat, sparse_feat):
-        sparse_feat_ = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
-        l_sparce_0, l_0_all = self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
-        l_n = self.__cross_layer(l_0=l_sparce_0)
-        y = self.__dnn_layer(l_0_all=l_0_all)
-        tmp = tf.concat(values=[l_n, y], axis=-1)
-
-        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num) # 最后是二分类
-        probs = tf.nn.softmax(logits=logits, axis=-1)
-
-        return logits, probs
-
     '''
     test interfaces
     '''
+    def test__sparse_feature_preprocess(self, sparse_feat):
+
+        return self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
+
     def test__embedding_layer(self, dense_feat, sparse_feat):
 
         return self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
 
-    def test__cross_layer(self, l_0):
+    def test__fm_layer(self, l_0):
 
-        return self.__cross_layer(l_0=l_0)
+        return self.__fm_layer(l_0=l_0)
 
     def test__dnn_layer(self, l_0_all):
 
@@ -182,8 +184,3 @@ class DCN:
     def test_calculate_loss(self, logits, labels):
 
         return self.calculate_loss(logits=logits, labels=labels)
-
-
-
-
-

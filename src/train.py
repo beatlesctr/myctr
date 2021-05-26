@@ -6,6 +6,7 @@ from feature.ml_1m import ML1MConfig, DataProcessor, \
     file_based_convert_examples_to_features, file_based_input_fn_builder
 from flag_center import FLAGS
 from model.dcn import DCN, DCNConfig
+from model.deepfm import DeepFM, DeepFMConfig
 
 
 def noam_scheme(init_lr, global_step):
@@ -39,8 +40,8 @@ def my_model_fn(features, labels, mode, params):
     y_label = labels
 
 
-    dcn = DCN(mode=mode, model_config=model_config, feat_config=feat_config)
-    logits, probs, sparse_ = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
+    dcn = DeepFM(mode=mode, model_config=model_config, feat_config=feat_config)
+    logits, probs = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
     loss = DCN.calculate_loss(logits=logits, labels=y_label)
 
     for v in tf.trainable_variables():
@@ -143,7 +144,7 @@ def get_tfrecord_filelist_from_dir(data_dir, has_dense_feat, feature_type='train
 def main(unused_params):
     # 加载配置
     feature_config = ML1MConfig.from_json_file(json_file=os.path.join(FLAGS.feature_dir, 'config.json'))
-    model_config = DCNConfig.from_json_file(FLAGS.model_config_file)
+    model_config = DeepFMConfig.from_json_file(FLAGS.model_config_file)
     tf.logging.info(model_config.to_json_string())
     tf.logging.info(feature_config.to_json_string())
 
