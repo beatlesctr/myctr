@@ -39,10 +39,9 @@ def my_model_fn(features, labels, mode, params):
         sparse_feat, dense_feat = features
     y_label = labels
 
-
     dcn = DeepFM(mode=mode, model_config=model_config, feat_config=feat_config)
     logits, probs = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
-    loss = DCN.calculate_loss(logits=logits, labels=y_label)
+    loss = DeepFM.calculate_loss(logits=logits, labels=y_label)
 
     for v in tf.trainable_variables():
         tf.logging.info(v.name)
