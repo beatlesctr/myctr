@@ -235,6 +235,9 @@ def serving_input_fn_builder_v2(sparse_feat_num, dense_feat_num):
             dense_feat = tf.compat.v1.placeholder(tf.float32, [None, dense_feat_num], name='dense_feat')
             feature_spec['dense_feat'] = dense_feat
 
+        features = [feature_spec['sparse_feat']]
+        if dense_feat_num > 0:
+            features.append(feature_spec['dense_feat'])
         serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(feature_spec)()
         return serving_input_receiver_fn
 

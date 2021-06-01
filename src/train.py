@@ -37,24 +37,32 @@ def my_model_fn(features, labels, mode, params):
         sparse_feat = features
         dense_feat = None
     else:
-        sparse_feat, dense_feat = features
+        if type(features) == dict:
+            sparse_feat = features['sparse_feat']
+            dense_feat = features['dense_feat'] if 'dense_feat' in features else None
+        else:
+            sparse_feat, dense_feat = features
+
     y_label = labels
+    loss = None
     if model_type == 'esmm':
         inst = Esmm(mode=mode, model_config=model_config, feat_config=feat_config)
         _, probs = inst.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
-        loss = inst.calculate_loss(probs=probs, labels=y_label)
+        if y_label is not None:
+            loss = inst.calculate_loss(probs=probs, labels=y_label)
     else:
         if model_type == 'dcn':
             inst = DCN(mode=mode, model_config=model_config, feat_config=feat_config)
         else:
             inst = DeepFM(mode=mode, model_config=model_config, feat_config=feat_config)
         logits, probs = inst.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
-        loss = DeepFM.calculate_loss(logits=logits, labels=y_label)
+        if y_label != None:
+            loss = DeepFM.calculate_loss(logits=logits, labels=y_label)
 
     for v in tf.trainable_variables():
         tf.logging.info(v.name)
-
-    tf.summary.scalar('loss', loss)
+    if loss != None:
+        tf.summary.scalar('loss', loss)
 
     '''
     可以通过summary 来看看参数训练过程中的数据分布
@@ -104,9 +112,9 @@ def my_model_fn(features, labels, mode, params):
             loss=loss
         )
 
-    elif mode == tf.estimator.ModeKeys.PREDICT:
+    else:
         '''
-        模型预测
+        模型导出
         '''
         if model_type == 'esmm':
             probs = probs[1]
@@ -120,9 +128,6 @@ def my_model_fn(features, labels, mode, params):
             predictions={'predict': probs[:, 1]},
             export_outputs=export_outputs
         )
-
-    else:
-        raise NotImplementedError('not implemented')
 
 
 def convert_feature_from_txt_to_tfrecord(data_dir, feature_config, feature_type='train'):
@@ -199,18 +204,19 @@ def main(unused_params):
     eval_input_fn = get_tfrecord_filelist_from_dir(data_dir=FLAGS.feature_dir,
                                                    has_dense_feat=has_dense_feat,
                                                    feature_type='eval')
+    if FLAGS.do_train:
+        experiment = tf.contrib.learn.Experiment(
+            estimator=estimator,
+            train_input_fn=train_input_fn,
+            eval_input_fn=eval_input_fn,
+            train_steps=train_step_num,
+            eval_steps=eval_step_num,
+            min_eval_frequency=FLAGS.save_checkpoint_steps
+            #train_monitors=[train_input_hook],
+            #eval_hooks=[eval_input_hook]
+        )
 
-    experiment = tf.contrib.learn.Experiment(
-        estimator=estimator,
-        train_input_fn=train_input_fn,
-        eval_input_fn=eval_input_fn,
-        train_steps=train_step_num,
-        eval_steps=eval_step_num,
-        min_eval_frequency=FLAGS.save_checkpoint_steps
-        #train_monitors=[train_input_hook],
-        #eval_hooks=[eval_input_hook]
-    )
-    experiment.train_and_evaluate()
+        experiment.train_and_evaluate()
 
     if FLAGS.do_export:
         estimator._export_to_tpu = False

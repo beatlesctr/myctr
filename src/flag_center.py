@@ -17,3 +17,5 @@ flags.DEFINE_string(name='feature_dir', default='./dat/ml-1m', help='特征存�
 
 flags.DEFINE_boolean(name='mk_feature', default=False, help='是否需要处理特征')
 flags.DEFINE_enum(name='model_type', default='deepfm', enum_values=['deepfm', 'dcn', 'esmm'], help='支持的模型')
+flags.DEFINE_boolean(name='do_train', default=False, help='是不是执行训练和评估')
+flags.DEFINE_boolean(name='do_export', default=True, help='是不是导出模型')
