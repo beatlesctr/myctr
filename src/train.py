@@ -196,15 +196,16 @@ def main(unused_params):
                                        model_fn=my_model_fn,
                                        config=run_config,
                                        params=params)
-    # 启动实验
-    has_dense_feat = len(feature_config.dense_feat_col_name) > 0
-    train_input_fn = get_tfrecord_filelist_from_dir(data_dir=FLAGS.feature_dir,
+    if FLAGS.do_train:
+        # 启动实验
+        has_dense_feat = len(feature_config.dense_feat_col_name) > 0
+        train_input_fn = get_tfrecord_filelist_from_dir(data_dir=FLAGS.feature_dir,
                                                     has_dense_feat=has_dense_feat,
                                                     feature_type='train')
-    eval_input_fn = get_tfrecord_filelist_from_dir(data_dir=FLAGS.feature_dir,
+        eval_input_fn = get_tfrecord_filelist_from_dir(data_dir=FLAGS.feature_dir,
                                                    has_dense_feat=has_dense_feat,
                                                    feature_type='eval')
-    if FLAGS.do_train:
+
         experiment = tf.contrib.learn.Experiment(
             estimator=estimator,
             train_input_fn=train_input_fn,
