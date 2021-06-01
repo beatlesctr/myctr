@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 class Esmm:
 
     def __init__(self, mode, model_config, feat_config):
@@ -17,6 +18,12 @@ class Esmm:
         for i in range(1, len(self._feat_config.sparse_feat_space_cfg), 1):
             sparse_feat_steps[i] = sparse_feat_steps[i-1] + self._feat_config.sparse_feat_space_cfg[i]
         self._sparse_feat_steps = tf.constant(value=sparse_feat_steps, dtype=tf.int32, name='sparse_feat_steps')
+
+        self._probs_ctr = None
+        self._probs_ctcvr = None
+        self._labels_ctr = None
+        self._labels_ctcvr = None
+
 
     def __sparse_feature_preprocess(self, sparse_feat):
         input_tmp = list()
@@ -87,13 +94,12 @@ class Esmm:
             probs_ctr = tf.nn.softmax(logits=logits_ctr, axis=-1)
             probs_cvr = tf.nn.softmax(logits=logits_cvr, axis=-1)
 
-            p_ctcvr = probs_ctr[:,1] * probs_cvr[:, 1]
-            probs_ctcvr = tf.concat(values=[1.0 - p_ctcvr, p_ctcvr], axis=-1)
+            self._p_ctcvr = probs_ctr[:,1] * probs_cvr[:, 1]
+            self._probs_ctcvr = tf.concat(values=[1.0 - self._p_ctcvr, self._p_ctcvr], axis=-1)
 
-        return None, (probs_ctr, probs_ctcvr)
+        return None, (self._probs_ctr, self._probs_ctcvr)
 
-    @staticmethod
-    def __calculate_loss(labels, probs):
+    def __calculate_loss(self, labels, probs):
 
         y_label = tf.squeeze(input=labels, axis=-1)
         y_probs = probs
@@ -102,15 +108,15 @@ class Esmm:
         loss_per_sample = tf.reduce_mean(input_tensor=loss_sum)
         return loss_per_sample
 
-    @staticmethod
-    def __preprocess_label(labels):
+    def __preprocess_label(self, labels):
 
         ones = tf.ones_like(tensor=labels)
         zeros = tf.zeros_like(tensor=labels)
 
-        labels_ctcvr = tf.where(condition=tf.greater(x=labels,y=ones), x=ones, y=zeros)
-        labels_ctr = tf.where(condition=tf.greater(x=labels,y=ones), x=ones, y=labels)
-        return labels_ctr, labels_ctcvr
+        self._labels_ctcvr = tf.where(condition=tf.greater(x=labels,y=ones), x=ones, y=zeros)
+        self._labels_ctr = tf.where(condition=tf.greater(x=labels,y=ones), x=ones, y=labels)
+
+        return self._labels_ctr, self._labels_ctcvr
 
     def calculate_loss(self, probs, labels):
 
@@ -121,3 +127,23 @@ class Esmm:
         loss_ctcvr = self.__calculate_loss(labels=labels_ctcvr, probs=probs_ctcvr)
 
         return  loss_ctr + loss_ctcvr
+
+    def get_metrics(self):
+
+        metrics = {
+            'ctr_auc': tf.metrics.auc(
+                labels=tf.cast(x=self._labels_ctr, dtype=tf.bool),
+                predictions=self._probs_ctr[:, 1],
+                name='ctr_auc',
+                num_thresholds=2000
+            ),
+            'ctcvr_auc': tf.metrics.auc(
+                labels=tf.cast(x=self._labels_ctcvr, dtype=tf.bool),
+                predictions=self._probs_ctcvr[:, 1],
+                name='ctcvr_auc',
+                num_thresholds=2000
+            )
+        }
+
+        return metrics
+

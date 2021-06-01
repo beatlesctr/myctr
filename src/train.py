@@ -3,10 +3,11 @@ import tensorflow as tf
 import os
 
 from feature.ml_1m import ML1MConfig, DataProcessor, \
-    file_based_convert_examples_to_features, file_based_input_fn_builder
+    file_based_convert_examples_to_features, file_based_input_fn_builder, serving_input_fn_builder_v2
 from flag_center import FLAGS
 from model.dcn import DCN, DCNConfig
 from model.deepfm import DeepFM, DeepFMConfig
+from model.esmm import Esmm
 
 
 def noam_scheme(init_lr, global_step):
@@ -27,7 +28,7 @@ def create_train_opt(loss, init_lr=0.001):
 def my_model_fn(features, labels, mode, params):
 
     model_config = params['model_config']
-
+    model_type = params['model_type']
     feat_config = params['feature_config']
 
     init_lr = params['init_lr']
@@ -38,10 +39,17 @@ def my_model_fn(features, labels, mode, params):
     else:
         sparse_feat, dense_feat = features
     y_label = labels
-
-    dcn = DeepFM(mode=mode, model_config=model_config, feat_config=feat_config)
-    logits, probs = dcn.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
-    loss = DeepFM.calculate_loss(logits=logits, labels=y_label)
+    if model_type == 'esmm':
+        inst = Esmm(mode=mode, model_config=model_config, feat_config=feat_config)
+        _, probs = inst.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
+        loss = inst.calculate_loss(probs=probs, labels=y_label)
+    else:
+        if model_type == 'dcn':
+            inst = DCN(mode=mode, model_config=model_config, feat_config=feat_config)
+        else:
+            inst = DeepFM(mode=mode, model_config=model_config, feat_config=feat_config)
+        logits, probs = inst.create_model(dense_feat=dense_feat, sparse_feat=sparse_feat)
+        loss = DeepFM.calculate_loss(logits=logits, labels=y_label)
 
     for v in tf.trainable_variables():
         tf.logging.info(v.name)
@@ -78,14 +86,17 @@ def my_model_fn(features, labels, mode, params):
         '''
         模型评估
         '''
-        metrics = {
-            'auc': tf.metrics.auc(
-                labels=tf.cast(x=labels, dtype=tf.bool),
-                predictions=probs[:, 1],
-                name='auc',
-                num_thresholds=2000
-            )
-        }
+        if model_type == 'esmm':
+            metrics = inst.get_metrics()
+        else:
+            metrics = {
+                'auc': tf.metrics.auc(
+                    labels=tf.cast(x=labels, dtype=tf.bool),
+                    predictions=probs[:, 1],
+                    name='auc',
+                    num_thresholds=2000
+                )
+            }
 
         return tf.estimator.EstimatorSpec(
             mode=mode,
@@ -97,6 +108,8 @@ def my_model_fn(features, labels, mode, params):
         '''
         模型预测
         '''
+        if model_type == 'esmm':
+            probs = probs[1]
         export_outputs = {
             'y': tf.estimator.export.PredictOutput(
                 {"predict": probs}
@@ -166,6 +179,7 @@ def main(unused_params):
                                         keep_checkpoint_max=FLAGS.keep_checkpoint_max)
     params = {
         'model_config': model_config,
+        'model_type': FLAGS.model_type,
         'feature_config': feature_config,
         'init_lr': FLAGS.init_lr,
         'train_batch_size': FLAGS.batch_size,
@@ -197,6 +211,12 @@ def main(unused_params):
         #eval_hooks=[eval_input_hook]
     )
     experiment.train_and_evaluate()
+
+    if FLAGS.do_export:
+        estimator._export_to_tpu = False
+        serving_input_fn = serving_input_fn_builder_v2(sparse_feat_num=len(feature_config.sparce_feat_col_name),
+                                                       dense_feat_num=len(feature_config.dense_feat_col_name))
+        estimator.export_savedmodel(os.path.join(FLAGS.model_dir, "pbtxt_model"), serving_input_fn, as_text=True)
 
 
 if __name__ == '''__main__''':
