@@ -60,7 +60,7 @@ class DeepFM:
         sparse_feat_steps = [0 for ele in self._feat_config.sparse_feat_space_cfg]
 
         for i in range(1, len(self._feat_config.sparse_feat_space_cfg), 1):
-            sparse_feat_steps[i] = sparse_feat_steps[i-1] + self._feat_config.sparse_feat_space_cfg[i]
+            sparse_feat_steps[i] = sparse_feat_steps[i-1] + self._feat_config.sparse_feat_space_cfg[i-1]
         self._sparse_feat_steps = tf.constant(value=sparse_feat_steps, dtype=tf.int32, name='sparse_feat_steps')
 
     def __sparse_feature_preprocess(self, sparse_feat):
