@@ -4,7 +4,6 @@ import json
 import six
 import tensorflow as tf
 
-
 class DCNConfig(object):
     """Configuration for `TransformerModel`."""
 
@@ -70,7 +69,7 @@ class DCN:
                 num_buckets=self._feat_config.sparse_feat_space_cfg[i]
             )) + self._sparse_feat_steps[i]
             input_tmp.append(feat)
-        sparse_feat = tf.transpose(a=tf.stack(values=input_tmp, axis=0), perm=[1,0])
+        sparse_feat = tf.transpose(a=tf.stack(values=input_tmp, axis=0), perm=[1, 0])
         return sparse_feat
 
     def __embedding_layer(self, dense_feat, sparse_feat):

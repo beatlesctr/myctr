@@ -168,10 +168,12 @@ def main(unused_params):
     # 处理特征
     if FLAGS.mk_feature:
 
+        tf.logging.info("begin crate train samples")
         convert_feature_from_txt_to_tfrecord(data_dir=FLAGS.feature_dir,
                                              feature_config=feature_config,
                                              feature_type='train')
 
+        tf.logging.info("begin create eval samples")
         convert_feature_from_txt_to_tfrecord(data_dir=FLAGS.feature_dir,
                                              feature_config=feature_config,
                                              feature_type='eval')
@@ -196,6 +198,7 @@ def main(unused_params):
                                        model_fn=my_model_fn,
                                        config=run_config,
                                        params=params)
+
     if FLAGS.do_train:
         # 启动实验
         has_dense_feat = len(feature_config.dense_feat_col_name) > 0
@@ -205,6 +208,7 @@ def main(unused_params):
         eval_input_fn = get_tfrecord_filelist_from_dir(data_dir=FLAGS.feature_dir,
                                                    has_dense_feat=has_dense_feat,
                                                    feature_type='eval')
+
 
         experiment = tf.contrib.learn.Experiment(
             estimator=estimator,

@@ -6,7 +6,6 @@ import pandas as pd
 import six
 import tensorflow as tf
 
-
 class Example:
     def __init__(self, guid, sparse_feat, dense_feat, y_label):
         self.guid = guid
@@ -140,7 +139,7 @@ def file_based_convert_examples_to_features(examples, output_dir, feature_type='
     writer = None
     for (ex_index, example) in enumerate(examples):
 
-        if ex_index % 100000 == 0:
+        if ex_index % 10000 == 0:
             if is_open:
                 writer.close()
                 is_open = False

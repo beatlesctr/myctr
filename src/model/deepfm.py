@@ -71,7 +71,7 @@ class DeepFM:
                 num_buckets=self._feat_config.sparse_feat_space_cfg[i]
             )) + self._sparse_feat_steps[i]
             input_tmp.append(feat)
-        sparse_feat = tf.transpose(a=tf.stack(values=input_tmp, axis=0), perm=[1,0])
+        sparse_feat = tf.transpose(a=tf.stack(values=input_tmp, axis=0), perm=[1, 0])
         return sparse_feat
 
     def __embedding_layer(self, dense_feat, sparse_feat):
@@ -93,16 +93,20 @@ class DeepFM:
 
 
         # 构造 dnn layer 的输入
+        feat_emb = None
         if dense_feat is not None:
             sparse_feat_emb_tmp = tf.reshape(tensor=sparse_feat_emb,
-                                         shape=[-1, self._sparse_feat_num*self._model_config.emb_size])
-            feat_emb = tf.concat(values=[sparse_feat_emb_tmp, dense_feat], axis=-1)
+                                         shape=[-1, self._sparse_feat_num, self._model_config.emb_size])
+            dense_feat = tf.reshape(tensor=dense_feat, shape=[-1, self._dense_feat_num, 1])
+            dense_feat = tf.layers.dense(inputs=dense_feat, units=self._model_config.emb_size,
+                                        activation=None, name='dense-emb')
+            feat_emb = tf.concat(values=[sparse_feat_emb_tmp, dense_feat], axis=-2)
         else:
             feat_emb = tf.reshape(tensor=sparse_feat_emb,
                                 shape=[-1, self._sparse_feat_num*self._model_config.emb_size])
         # B x (Ns*E+Nd)
         feat_emb = tf.reshape(tensor=feat_emb,
-                         shape=[-1, (self._sparse_feat_num*self._model_config.emb_size + self._dense_feat_num)])
+                              shape=[-1, (self._sparse_feat_num + self._dense_feat_num)*self._model_config.emb_size])
         return sparse_feat_emb, feat_emb
 
     def __fm_layer(self, l_0):
@@ -126,7 +130,7 @@ class DeepFM:
         y = l_0_all
         for i in range(len(self._model_config.dnn_layer_cfg)):
             y = tf.layers.dense(inputs=y, units=self._model_config.dnn_layer_cfg[i],
-                                activation=tf.nn.relu, name='dense-' + str(i))
+                                activation=tf.nn.relu, name='dense-' + str(i));
             y = tf.nn.dropout(x=y, keep_prob=keep_prob)
         l_n_all = y
         return l_n_all

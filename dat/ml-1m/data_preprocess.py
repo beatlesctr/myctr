@@ -35,10 +35,10 @@ train_set_size = int(len(result) * 9 / 10)
 test_set_size = int(len(result) / 10)
 print(train_set_size)
 print(test_set_size)
-result.reindex()
+result.reset_index(drop=True, inplace=True)
 train_set = result.loc[result.index.intersection(index[:train_set_size])]
-test_set = result.loc[result.index.intersection(index[test_set_size:])]
+test_set = result.loc[result.index.intersection(index[-test_set_size:])]
 
-train_set.to_csv("train.txt", sep=':', index=False)
-test_set.to_csv("eval.txt", sep=':', index=False)
+train_set.to_csv("./raw/train.txt", sep=':', index=False)
+test_set.to_csv("./raw/eval.txt", sep=':', index=False)
 print('done')
