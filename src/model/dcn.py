@@ -101,7 +101,7 @@ class DCN:
                          shape=[-1, (self._sparse_feat_num*self._model_config.emb_size + self._dense_feat_num)])
         return sparse_feat_emb, feat_emb
 
-    def __cross_layer(self, l_0):
+    def  __cross_layer(self, l_0):
         '''
         :param l_0: B x Ns x 1
         :return: B x Ns
@@ -148,16 +148,31 @@ class DCN:
         return loss_per_sample
 
     def create_model(self, dense_feat, sparse_feat):
-        sparse_feat_ = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
+        #sparse_feat_ = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
         l_sparce_0, l_0_all = self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
         l_n = self.__cross_layer(l_0=l_sparce_0)
         y = self.__dnn_layer(l_0_all=l_0_all)
         tmp = tf.concat(values=[l_n, y], axis=-1)
 
-        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num) # 最后是二分类
+        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num, name='proj') # 最后是二分类
         probs = tf.nn.softmax(logits=logits, axis=-1)
 
         return logits, probs
+
+    def create_model_by_emb(self, l_sparce_0, l_0_all):
+
+        l_n = self.__cross_layer(l_0=l_sparce_0)
+        y = self.__dnn_layer(l_0_all=l_0_all)
+        tmp = tf.concat(values=[l_n, y], axis=-1)
+
+        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num, name='proj') # 最后是二分类
+        probs = tf.nn.softmax(logits=logits, axis=-1)
+
+        return logits, probs
+
+    def embedding_layer(self, dense_feat, sparse_feat):
+
+        return self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
 
     '''
     test interfaces

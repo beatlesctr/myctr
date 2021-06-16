@@ -4,7 +4,7 @@ import json
 import six
 import tensorflow as tf
 
-class DeepFMConfig(object):
+class DNNConfig(object):
     """Configuration for `TransformerModel`."""
 
     def __init__(self,
@@ -22,7 +22,7 @@ class DeepFMConfig(object):
     @classmethod
     def from_dict(cls, json_object):
         """Constructs a `TransformerConfig` from a Python dictionary of parameters."""
-        config = DeepFMConfig()
+        config = DNNConfig()
         for (key, value) in six.iteritems(json_object):
             config.__dict__[key] = value
         return config
@@ -44,7 +44,7 @@ class DeepFMConfig(object):
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
 
-class DeepFM:
+class DNN:
 
 
     def __init__(self, mode, model_config, feat_config):
@@ -96,30 +96,18 @@ class DeepFM:
         feat_emb = None
         if dense_feat is not None:
             sparse_feat_emb_tmp = tf.reshape(tensor=sparse_feat_emb,
-                                         shape=[-1, self._sparse_feat_num, self._model_config.emb_size])
+                                             shape=[-1, self._sparse_feat_num, self._model_config.emb_size])
             dense_feat = tf.reshape(tensor=dense_feat, shape=[-1, self._dense_feat_num, 1])
             dense_feat = tf.layers.dense(inputs=dense_feat, units=self._model_config.emb_size,
-                                        activation=None, name='dense-emb')
+                                         activation=None, name='dense-emb')
             feat_emb = tf.concat(values=[sparse_feat_emb_tmp, dense_feat], axis=-2)
         else:
             feat_emb = tf.reshape(tensor=sparse_feat_emb,
-                                shape=[-1, self._sparse_feat_num*self._model_config.emb_size])
+                                  shape=[-1, self._sparse_feat_num*self._model_config.emb_size])
         # B x (Ns*E+Nd)
         feat_emb = tf.reshape(tensor=feat_emb,
                               shape=[-1, (self._sparse_feat_num + self._dense_feat_num)*self._model_config.emb_size])
         return sparse_feat_emb, feat_emb
-
-    def __fm_layer(self, l_0):
-        '''
-        sparse_feat: B x Ns x E
-        '''
-        # B x E
-        first_order = tf.reduce_sum(input_tensor=l_0, axis=1, keep_dims=False)
-        second_order = tf.square(x=first_order) \
-                       - tf.reduce_sum(input_tensor=tf.square(x=l_0), axis=1, keep_dims=False)
-        bias = tf.get_variable(name="bias", shape=[1, self._model_config.emb_size])
-        fm = first_order + 0.5 * second_order + bias
-        return fm
 
     def __dnn_layer(self, l_0_all):
         '''
@@ -139,21 +127,18 @@ class DeepFM:
 
         #sparse_feat_ = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
         l_sparce_0, l_0_all = self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
-        l_n = self.__fm_layer(l_0=l_sparce_0)
+
         y = self.__dnn_layer(l_0_all=l_0_all)
-        tmp = tf.concat(values=[l_n, y], axis=-1)
-        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num, name='proj')  # 最后是二分类
+        logits = tf.layers.dense(inputs=y, units=self._feat_config.label_num, name='proj')  # 最后是二分类
         probs = tf.nn.softmax(logits=logits, axis=-1)
 
         return logits, probs
 
     def create_model_by_emb(self, l_sparce_0, l_0_all):
 
-        l_n = self.__fm_layer(l_0=l_sparce_0)
         y = self.__dnn_layer(l_0_all=l_0_all)
-        tmp = tf.concat(values=[l_n, y], axis=-1)
 
-        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num, name='proj') # 最后是二分类
+        logits = tf.layers.dense(inputs=y, units=self._feat_config.label_num, name="proj") # 最后是二分类
         probs = tf.nn.softmax(logits=logits, axis=-1)
 
         return logits, probs
@@ -188,10 +173,6 @@ class DeepFM:
     def test__embedding_layer(self, dense_feat, sparse_feat):
 
         return self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
-
-    def test__fm_layer(self, l_0):
-
-        return self.__fm_layer(l_0=l_0)
 
     def test__dnn_layer(self, l_0_all):
 

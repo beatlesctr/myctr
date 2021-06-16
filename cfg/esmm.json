@@ -1,0 +1,31 @@
+{
+  "model_name": "dnn",
+  "model_set": {
+    "dnn": {
+      "emb_size":12,
+      "dnn_layer_cfg": [
+        128,
+        64
+      ],
+      "dropout_prob": 0.0
+    },
+    "deepfm": {
+      "emb_size":12,
+      "dnn_layer_cfg":[
+        128,
+        64
+      ],
+      "dropout_prob":0.0
+    },
+    "dcn": {
+      "emb_size":6,
+      "cross_layer_num":2,
+      "dnn_layer_cfg":[
+        256,
+        256,
+        256
+      ],
+      "dropout_prob":0.0
+    }
+  }
+}
