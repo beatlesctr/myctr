@@ -3,7 +3,7 @@ import tensorflow as tf
 flags = tf.flags
 FLAGS = flags.FLAGS
 
-flags.DEFINE_enum(name='model_type', default='dcn', enum_values=['dnn', 'deepfm', 'dcn', 'esmm'], help='支持的模型')
+flags.DEFINE_enum(name='model_type', default='esmm', enum_values=['dnn', 'deepfm', 'dcn', 'esmm'], help='支持的模型')
 flags.DEFINE_string(name='model_config_file', default='./cfg/' + FLAGS.model_type + '.json', help='模型配置文件位置')
 
 flags.DEFINE_integer(name='epoch_num', default=10, help='epoch数量')

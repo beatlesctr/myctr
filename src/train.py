@@ -77,6 +77,7 @@ def my_model_fn(features, labels, mode, params):
         hook_dict = {
             'loss': loss,
             'step': global_step,
+            'y_label': y_label
             #'sparse': sparse_,
             #'sparse_ori': sparse_feat
         }

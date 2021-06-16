@@ -64,7 +64,7 @@ class Esmm:
         self._mode = mode
 
         MODEL, MODELConfig = Esmm.MODEL_MAP[model_config.model_name]
-        model_config_inner = MODELConfig.from_dict(MODELConfig.model_set[model_config.model_name])
+        model_config_inner = MODELConfig.from_dict(model_config.model_set[model_config.model_name])
         self._model = MODEL(mode=mode, model_config=model_config_inner, feat_config=feat_config)
 
         self._probs_ctr = None
@@ -73,12 +73,13 @@ class Esmm:
         self._labels_ctcvr = None
 
     def create_model(self, dense_feat, sparse_feat):
-        l_sparce_0, l_0_all = self._model.embedding_layer(self, dense_feat, sparse_feat)
+        l_sparce_0, l_0_all = self._model.embedding_layer(dense_feat, sparse_feat)
 
         with tf.variable_scope(name_or_scope='bi-encoder', reuse=tf.AUTO_REUSE):
             _, self._probs_ctr = self._model.create_model_by_emb(l_sparce_0=l_sparce_0, l_0_all=l_0_all)
             _, self._probs_cvr = self._model.create_model_by_emb(l_sparce_0=l_sparce_0, l_0_all=l_0_all)
             p_ctcvr = self._probs_ctr[:,1] * self._probs_cvr[:, 1]
+            p_ctcvr = tf.expand_dims(input=p_ctcvr, axis=-1)
             self._probs_ctcvr = tf.concat(values=[1.0 - p_ctcvr, p_ctcvr], axis=-1)
 
         return None, (self._probs_ctr, self._probs_ctcvr)
