@@ -5,11 +5,11 @@ from src.feature.ml_1m import ML1MConfig, DataProcessor, file_based_convert_exam
 class DataProcessorTest:
 
     def __init__(self):
-        feat_cfg = ML1MConfig.from_json_file(json_file='.\\dat\\ml-1m\\config.json')
+        feat_cfg = ML1MConfig.from_json_file(json_file='.\\dat\\raw\\config.json')
         self._inst = DataProcessor(feat_cfg=feat_cfg)
 
     def test_get_train_examples(self):
-        data_dir = ['.\\dat\\ml-1m\\eval.txt']
+        data_dir = ['.\\dat\\raw\\eval.txt']
         tmp = self._inst.get_train_examples(data_dir=data_dir)
         for ele in tmp[:100]:
             print(ele)
