@@ -1,7 +1,7 @@
 from model.deepfm import DeepFM, DeepFMConfig
 import tensorflow as tf
 
-class DeepFMAlley():
+class DeepFMAttention():
 
     def __init__(self, mode, model_config, feat_config):
         self._mode = mode
@@ -87,6 +87,5 @@ class DeepFMAlley():
         probs = tf.nn.softmax(logits=logits, axis=-1)
 
         return logits, probs
-
 
 
