@@ -50,8 +50,7 @@ class DeepFMAlley():
             dk += s[1]
         return tf.concat(values=emb_list, axis=-1), dk
 
-    def create_model(self, sparse_feat, dense_feat,
-                     cur_item_feat, history_behavior_seq_feat_list, history_behavior_seq_feat_mask_list):
+    def __attention_layer(self, cur_item_feat, history_behavior_seq_feat_list, history_behavior_seq_feat_mask_list):
 
         # attention part
         cur_item_feat_seq, dk = tf.expand_dims(input=cur_item_feat, axis=1)
@@ -63,12 +62,19 @@ class DeepFMAlley():
 
             k_i_mask = history_behavior_seq_feat_mask_list[i]
             attention_score_i = DeepFMAlley.__scaled_dot_product_attention(q=q, k=k_i, v=k_i,
-                                                    mask_q=None, mask_k=k_i_mask, mask_v=k_i_mask,
-                                                    dk=dk, training=tf.estimator.ModeKeys.TRAIN==self._mode)
+                                                                           mask_q=None, mask_k=k_i_mask, mask_v=k_i_mask,
+                                                                           dk=dk, training=tf.estimator.ModeKeys.TRAIN==self._mode)
             attention_score_list.append(attention_score_i)
 
         attention_score = tf.squeeze(input=tf.concat(values=attention_score_list, axis=-1), axis=1)
+        return attention_score
 
+    def create_model(self, sparse_feat, dense_feat,
+                     cur_item_feat, history_behavior_seq_feat_list, history_behavior_seq_feat_mask_list):
+        # attention part
+        attention_score = self.__attention_layer(cur_item_feat=cur_item_feat,
+                                                 history_behavior_seq_feat_list=history_behavior_seq_feat_list,
+                                                 history_behavior_seq_feat_mask_list=history_behavior_seq_feat_mask_list)
         l_sparce_0, l_0_all = self._deepfm.embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
         # fm part
         l_n = self.__fm_layer(l_0=l_sparce_0)
