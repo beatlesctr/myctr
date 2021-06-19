@@ -60,14 +60,21 @@ class DeepFMAttention():
             dk += s[1]
         return tf.concat(values=emb_list, axis=-1), dk
 
-    def __attention_layer(self, cur_item_feat, history_behavior_seq_feat, history_behavior_seq_feat_mask):
+    def __get_seq_mask_by_value(self, seq_feat):
 
+        seq_feat_tmp = seq_feat[:, :, 0]
+        mynull = tf.fill(dims=tf.shape(seq_feat_tmp), value="mynull")
+        ones = tf.ones_like(seq_feat_tmp)
+        zeros = tf.zeros_like(seq_feat_tmp)
+        return tf.where(tf.equal(x=seq_feat, y=mynull), x=zeros, y=ones)
+
+    def __attention_layer(self, cur_item_feat, seq_feat):
+        seq_feat = tf.reshape(tensor=seq_feat, shape=[-1, self._feat_config.max_seq_len, self._feat_config.q_cell_size])
         # attention part
         cur_item_feat_seq, dk = tf.expand_dims(input=cur_item_feat, axis=1)
         q = self.__seq_feat_emb(seq_feat=cur_item_feat_seq)
-        attention_score_list = list()
-        k_i,_ = self.__seq_feat_emb(seq_feat=history_behavior_seq_feat)
-        k_i_mask = history_behavior_seq_feat_mask
+        k_i, _ = self.__seq_feat_emb(seq_feat=seq_feat)
+        k_i_mask = self.__get_seq_mask_by_value(seq_feat=seq_feat)
         attention_score_i = DeepFMAttention.__scaled_dot_product_attention(q=q, k=k_i, v=k_i,
                                                                 mask_q=None, mask_k=k_i_mask, mask_v=k_i_mask,
                                                                 dk=dk, training=tf.estimator.ModeKeys.TRAIN==self._mode)
@@ -77,7 +84,7 @@ class DeepFMAttention():
         return attention_score
 
     def create_model(self, sparse_feat, dense_feat,
-                     cur_item_feat, history_behavior_seq_feat_list, history_behavior_seq_feat_mask_list):
+                     cur_item_feat, seq_feat):
         '''
         :param sparse_feat: B x Ns
         :type sparse_feat: tf.Tensor
@@ -85,17 +92,13 @@ class DeepFMAttention():
         :type dense_feat: tf.Tensor
         :param cur_item_feat: B x Ni
         :type cur_item_feat: tf.Tensor
-        :param history_behavior_seq_feat_list: B x S x Ni
-        :type history_behavior_seq_feat_list: tf.Tensor
-        :param history_behavior_seq_feat_mask_list: B x S
-        :type history_behavior_seq_feat_mask_list: tf.Tensor
+        :param seq_feat: B x S x Ni
+        :type seq_feat: tf.Tensor
         :return: logits, prob
         :rtype: tf.Tensor, tf.Tensor
         '''
         # attention part
-        attention_score = self.__attention_layer(cur_item_feat=cur_item_feat,
-                                                 history_behavior_seq_feat_list=history_behavior_seq_feat_list,
-                                                 history_behavior_seq_feat_mask_list=history_behavior_seq_feat_mask_list)
+        attention_score = self.__attention_layer(cur_item_feat=cur_item_feat, seq_feat=seq_feat)
         l_sparce_0, l_0_all = self._deepfm.embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
         # fm part
         l_n = self.__fm_layer(l_0=l_sparce_0)

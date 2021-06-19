@@ -41,11 +41,12 @@ def my_model_fn(features, labels, mode, params):
         if len(features) == 2:
             sparse_feat, dense_feat = features
         else:
-            sparse_feat, dense_feat, seq_feat = features
+            sparse_feat, dense_feat, seq_feat, cur_item_feat = features
     else: # 用于模型导出
         sparse_feat = features['sparse_feat']
         dense_feat = features['dense_feat'] if 'dense_feat' in features else None
         seq_feat = features['seq_feat'] if 'seq_feat' in features else None
+        cur_item_feat = features['cur_item_feat'] if 'cur_item_feat' in features else None
 
     y_label = labels
     loss = None

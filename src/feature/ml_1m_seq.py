@@ -8,32 +8,34 @@ import pandas as pd
 import six
 import tensorflow as tf
 
+
 class Example:
+
     def __init__(self, guid, sparse_feat, dense_feat, cur_item_feat, seq_feat, y_label):
         self.guid = guid
         self.sparse_feat = sparse_feat
         self.dense_feat = dense_feat
+
         self.cur_item_feat = cur_item_feat
         self.seq_feat = seq_feat
+
         self.y_label = y_label
 
 
 class ML1MSeqConfig(object):
-    """Configuration for `TransformerModel`."""
 
     def __init__(self, ml1m_config=None,
                  max_seq_len=30,
-                 seq_cell_size = 1,
+                 seq_cell_size=1,
                  seq_feat_col_name=['Seq'],
                  cur_item_col_name=['Item'],
-                 behavior_attr_space_cfg=[3000, 3, 2]):
+                 seq_cell_space_cfg=[3000, 3, 2]):
         self.ml1m_config = ml1m_config
         self.max_seq_len = max_seq_len
         self.seq_cell_size = seq_cell_size
-        self.seq_cell_size = seq_cell_size
         self.seq_feat_col_name = seq_feat_col_name
         self.cur_item_col_name = cur_item_col_name
-        self.behavior_attr_space_cfg = behavior_attr_space_cfg
+        self.seq_cell_space_cfg = seq_cell_space_cfg
 
 
     @classmethod
@@ -83,17 +85,18 @@ class DataProcessor(object):
         sparse_feats, dense_feats, seq_feats, y_labels = self._read_txt_as_dataframe(input_files=input_files)
         return self._create_examples(sparse_feats, dense_feats, seq_feats, y_labels)
 
-
     def get_labels(self):
         """Gets the list of labels for this dat set."""
         raise NotImplementedError()
 
     def _read_txt_as_dataframe(self, input_files):
+
         df_list = list()
         for input_file in input_files:
             dataframe = pd.read_csv(filepath_or_buffer=input_file, sep=':')
             df_list.append(dataframe)
         dataframe = pd.concat(df_list)
+
         sparse_feats = dataframe[self._feat_cfg.sparce_feat_col_name]
         dense_feats = None
         if len(self._feat_cfg.dense_feat_col_name) != 0:
@@ -102,7 +105,8 @@ class DataProcessor(object):
         def seq_proc(seq_row, max_seq_len, seq_cell_size):
             cel_str_list = seq_row.split(';') # ['男,1', 'nan,2']
             cel_str_container = [['mynull' for j in range(seq_cell_size)] for i in range(max_seq_len)]
-            for i in range(len(cel_str_list)):
+            size = min(len(cel_str_list), max_seq_len)
+            for i in range(size):
                 cel_str_container[i] = cel_str_list[i].split(',')
             cel_str_container_np = np.array(cel_str_container).reshape(max_seq_len*seq_cell_size)
             return cel_str_container_np
@@ -124,7 +128,6 @@ class DataProcessor(object):
 
     def _create_examples(self, sparse_feats, dense_feats, seq_feats, cur_item_feat, y_labels):
 
-        """Creates examples for the training and dev sets."""
         size = len(y_labels)
         examples = []
         for i in range(size):
@@ -173,6 +176,7 @@ def file_based_convert_examples_to_features(examples, output_dir, feature_type='
             features['dense_feature'] = create_float_feature(example.dense_feat)
         if example.seq_feat is not None:
             features['seq_feat'] = create_str_feature(example.seq_feat)
+        if example.cur_item_feat is not None:
             features['cur_item_feat'] = create_str_feature(example.cur_item_feat)
         features['y_label'] = create_int_feature(example.y_label)
         tf_example = tf.train.Example(features=tf.train.Features(feature=features))
@@ -202,7 +206,6 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat=False, 
 
     name_to_feature_s = {
         'sparse_feature': tf.VarLenFeature(dtype=tf.string),
-        #'dense_feat': tf.VarLenFeature(dtype=tf.float32),
         'y_label': tf.VarLenFeature(dtype=tf.int64)
     }
 
@@ -264,7 +267,7 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat=False, 
     return input_fn
 
 
-def serving_input_fn_builder_v2(sparse_feat_num, dense_feat_num):
+def serving_input_fn_builder_v2(sparse_feat_num, dense_feat_num, max_seq_len, seq_cell_size):
 
     def serving_input_fn():
         feature_spec = dict()
@@ -273,10 +276,14 @@ def serving_input_fn_builder_v2(sparse_feat_num, dense_feat_num):
         if dense_feat_num > 0:
             dense_feat = tf.compat.v1.placeholder(tf.float32, [None, dense_feat_num], name='dense_feat')
             feature_spec['dense_feat'] = dense_feat
+        if max_seq_len > 0 and seq_cell_size > 0:
+            size = max_seq_len * seq_cell_size
+            seq_feat = tf.compat.v1.placeholder(tf.string, [None, size], name='seq_feat')
+            feature_spec['seq_feat'] = seq_feat
 
-        features = [feature_spec['sparse_feat']]
-        if dense_feat_num > 0:
-            features.append(feature_spec['dense_feat'])
+            cur_item_feat = tf.compat.v1.placeholder(tf.string, [None, seq_cell_size], name='cur_item_feat')
+            feature_spec['cur_item_feat'] = cur_item_feat
+
         serving_input_receiver_fn = tf.estimator.export.build_raw_serving_input_receiver_fn(feature_spec)()
         return serving_input_receiver_fn
 
