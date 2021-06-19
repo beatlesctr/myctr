@@ -219,6 +219,7 @@ def file_based_input_fn_builder(input_files, is_training, has_dense_feat):
                 drop_remainder=not is_training
             )
         )
+        d = d.prefetch(1)
         return d
 
     return input_fn

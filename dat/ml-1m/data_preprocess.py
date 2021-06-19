@@ -2,6 +2,8 @@ import pandas as pd
 
 import pandas as pd
 
+use_esmm = True
+
 user = pd.read_table(filepath_or_buffer='./raw/users.dat', sep='::')
 movie = pd.read_table(filepath_or_buffer='./raw/movies.dat', sep='::')
 def process_genres(genres):
@@ -19,7 +21,10 @@ result = pd.merge(left=result, right=movie, on='MovieID', how='left')
 result = result.sort_values(by='Timestamp')[lambda x : x['Rating'] != 3]
 del result['Timestamp']
 
-result['Rating'] = result.apply(lambda x: 0 if int(x['Rating']) < 3 else 1, axis=1)
+if use_esmm:
+    result['Rating'] = result.apply(lambda x: 0 if int(x['Rating']) < 3 else (1 if int(x['Rating']) < 5 else 2), axis=1)
+else:
+    result['Rating'] = result.apply(lambda x: 0 if int(x['Rating']) < 3 else 1, axis=1)
 sparse_cols = ["UserID","MovieID","Gender","Age","Occupation","Zip-code","Title","Genres1","Genres2","Genres3"]
 
 sparse_feat_space_cfg = list()

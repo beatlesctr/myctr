@@ -1,0 +1,33 @@
+{
+  "dense_feat_col_name": [],
+  "sparce_feat_col_name": [
+    "UserID",
+    "MovieID",
+    "Gender",
+    "Age",
+    "Occupation",
+    "Zip-code",
+    "Title",
+    "Genres1",
+    "Genres2",
+    "Genres3"
+  ],
+  "sparse_feat_space_cfg": [
+    6040,
+    3706,
+    2,
+    7,
+    21,
+    3439,
+    3706,
+    18,
+    18,
+    18
+  ],
+  "label_col_name": [
+    "Rating"
+  ],
+  "label_num": 2,
+  "train_sample_num": 665110,
+  "test_sample_num": 73901
+}

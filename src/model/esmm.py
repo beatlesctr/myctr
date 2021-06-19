@@ -1,7 +1,61 @@
+import copy
+import json
+
+import six
 import tensorflow as tf
+
+from model.dcn import DCN, DCNConfig
+from model.deepfm import DeepFM, DeepFMConfig
+from model.dnn import DNN, DNNConfig
+
+
+class EsmmConfig:
+
+    def __init__(self,
+                 emb_size=12,
+                 model_name="dcn",
+                 model_set=None
+                 ):
+        self.emb_size = emb_size,
+        self.model_name = model_name,
+        self.model_set = model_set
+
+
+    @classmethod
+    def from_dict(cls, json_object):
+        """Constructs a `TransformerConfig` from a Python dictionary of parameters."""
+        config = EsmmConfig()
+        for (key, value) in six.iteritems(json_object):
+
+            config.__dict__[key] = value
+        return config
+
+
+    @classmethod
+    def from_json_file(cls, json_file):
+        """Constructs a `TransformerConfig` from a json file of parameters."""
+        with tf.gfile.GFile(json_file, "r") as reader:
+            text = reader.read()
+        return cls.from_dict(json.loads(text))
+
+
+    def to_dict(self):
+        """Serializes this instance to a Python dictionary."""
+        output = copy.deepcopy(self.__dict__)
+        return output
+
+
+    def to_json_string(self):
+        """Serializes this instance to a JSON string."""
+        return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
 
 class Esmm:
+    MODEL_MAP={
+        "dnn":[DNN, DNNConfig],
+        "dcn": [DCN, DCNConfig],
+        "deepfm": [DeepFM, DeepFMConfig]
+    }
 
     def __init__(self, mode, model_config, feat_config):
 
@@ -9,93 +63,24 @@ class Esmm:
         self._feat_config = feat_config
         self._mode = mode
 
-        self._sparse_feat_num = len(self._feat_config.sparse_feat_space_cfg)
-        self._dense_feat_num = len(self._feat_config.dense_feat_col_name)
-        self._sparse_feat_space_size = sum(self._feat_config.sparse_feat_space_cfg)
-
-        sparse_feat_steps = [0 for ele in self._feat_config.sparse_feat_space_cfg]
-
-        for i in range(1, len(self._feat_config.sparse_feat_space_cfg), 1):
-            sparse_feat_steps[i] = sparse_feat_steps[i-1] + self._feat_config.sparse_feat_space_cfg[i-1]
-        self._sparse_feat_steps = tf.constant(value=sparse_feat_steps, dtype=tf.int32, name='sparse_feat_steps')
+        MODEL, MODELConfig = Esmm.MODEL_MAP[model_config.model_name]
+        model_config_inner = MODELConfig.from_dict(model_config.model_set[model_config.model_name])
+        self._model = MODEL(mode=mode, model_config=model_config_inner, feat_config=feat_config)
 
         self._probs_ctr = None
         self._probs_ctcvr = None
         self._labels_ctr = None
         self._labels_ctcvr = None
 
-
-    def __sparse_feature_preprocess(self, sparse_feat):
-        input_tmp = list()
-        for i in range(len(self._feat_config.sparse_feat_space_cfg)):
-            feat = tf.to_int32(tf.string_to_hash_bucket_fast(
-                input=sparse_feat[:, i],
-                num_buckets=self._feat_config.sparse_feat_space_cfg[i]
-            )) + self._sparse_feat_steps[i]
-            input_tmp.append(feat)
-        sparse_feat = tf.transpose(a=tf.stack(values=input_tmp, axis=0), perm=[1,0])
-        return sparse_feat
-
-    def __embedding_layer(self, dense_feat, sparse_feat):
-        '''
-        :param dense_feat: B x Nd
-        :param sparse_feat: B x Ns
-        :return:
-        '''
-        # 构造 cross layer 的输入
-        # B x N x E
-
-        sparse_feat = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
-        emb_matrix_s = tf.get_variable(name="emb_s",
-                                       dtype=tf.float32,
-                                       shape=[self._sparse_feat_space_size, self._model_config.emb_size],
-                                       initializer=tf.truncated_normal_initializer(stddev=0.02))
-        sparse_feat_emb = tf.nn.embedding_lookup(params=emb_matrix_s, ids=sparse_feat)
-        # B x (Ns*E)
-        sparse_feat_emb = tf.reshape(tensor=sparse_feat_emb,
-                                     shape=[-1, self._sparse_feat_num * self._model_config.emb_size])
-
-        # 构造 dnn layer 的输入
-        if dense_feat is not None:
-            feat_emb = tf.concat(values=[sparse_feat_emb, dense_feat], axis=-1)
-        else:
-            feat_emb = sparse_feat_emb
-        # B x (Ns*E+Nd)
-        feat_emb = tf.reshape(tensor=feat_emb,
-                         shape=[-1, (self._sparse_feat_num*self._model_config.emb_size + self._dense_feat_num)])
-        return sparse_feat_emb, feat_emb
-
-    def __dnn_layer(self, l_0_all):
-        '''
-        :param l_0_all: B x N
-        :return: B x M
-        '''
-        keep_prob = 1.0 - self._model_config.dropout_prob if tf.estimator.ModeKeys.TRAIN == self._mode else 1.0
-        y = l_0_all
-        for i in range(len(self._model_config.dnn_layer_cfg)):
-            y = tf.layers.dense(inputs=y, units=self._model_config.dnn_layer_cfg[i],
-                                activation=tf.nn.relu, name='dense-' + str(i))
-            y = tf.nn.dropout(x=y, keep_prob=keep_prob)
-        l_n_all = y
-        return l_n_all
-
     def create_model(self, dense_feat, sparse_feat):
-
-        sparse_feat = self.__sparse_feature_preprocess(sparse_feat=sparse_feat)
-        sparse_feat_emb, feat_emb = self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
+        l_sparce_0, l_0_all = self._model.embedding_layer(dense_feat, sparse_feat)
 
         with tf.variable_scope(name_or_scope='bi-encoder', reuse=tf.AUTO_REUSE):
-            logits_cvr = self.__dnn_layer(l_0_all=feat_emb)
-            logits_ctr = self.__dnn_layer(l_0_all=feat_emb)
-
-            logits_ctr = tf.layers.dense(inputs=logits_ctr, units=self._feat_config.label_num, name='ctr')
-            logits_cvr = tf.layers.dense(inputs=logits_cvr, units=self._feat_config.label_num, name='cvr')
-
-            probs_ctr = tf.nn.softmax(logits=logits_ctr, axis=-1)
-            probs_cvr = tf.nn.softmax(logits=logits_cvr, axis=-1)
-
-            self._p_ctcvr = probs_ctr[:,1] * probs_cvr[:, 1]
-            self._probs_ctcvr = tf.concat(values=[1.0 - self._p_ctcvr, self._p_ctcvr], axis=-1)
+            _, self._probs_ctr = self._model.create_model_by_emb(l_sparce_0=l_sparce_0, l_0_all=l_0_all)
+            _, self._probs_cvr = self._model.create_model_by_emb(l_sparce_0=l_sparce_0, l_0_all=l_0_all)
+            p_ctcvr = self._probs_ctr[:,1] * self._probs_cvr[:, 1]
+            p_ctcvr = tf.expand_dims(input=p_ctcvr, axis=-1)
+            self._probs_ctcvr = tf.concat(values=[1.0 - p_ctcvr, p_ctcvr], axis=-1)
 
         return None, (self._probs_ctr, self._probs_ctcvr)
 
