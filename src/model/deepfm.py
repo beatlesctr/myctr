@@ -129,7 +129,7 @@ class DeepFM:
         keep_prob = 1.0 - self._model_config.dropout_prob if tf.estimator.ModeKeys.TRAIN == self._mode else 1.0
         y = l_0_all
         for i in range(len(self._model_config.dnn_layer_cfg)):
-            y = tf.layers.dense(inputs=y, units=self._model_config.dnn_layer_cfg[i],
+            y = tf.layers.dense(inputs=y, units=self._model_config.dnn_layer_cfg[i],use_bias=True,
                                 activation=tf.nn.relu, name='dense-' + str(i));
             y = tf.nn.dropout(x=y, keep_prob=keep_prob)
         l_n_all = y
@@ -153,7 +153,9 @@ class DeepFM:
         y = self.__dnn_layer(l_0_all=l_0_all)
         tmp = tf.concat(values=[l_n, y], axis=-1)
 
-        logits = tf.layers.dense(inputs=tmp, units=self._feat_config.label_num, name='proj') # 最后是二分类
+        logits = tf.layers.dense(inputs=tmp,
+                                 units=self._feat_config.label_num,
+                                 name='proj') # 最后是二分类
         probs = tf.nn.softmax(logits=logits, axis=-1)
 
         return logits, probs
@@ -161,6 +163,15 @@ class DeepFM:
     def embedding_layer(self, dense_feat, sparse_feat):
 
         return self.__embedding_layer(dense_feat=dense_feat, sparse_feat=sparse_feat)
+
+    def fm_layer(self, l_0):
+
+        return self.__fm_layer(l_0=l_0)
+
+    def dnn_layer(self, l_0_all):
+
+        return self.__dnn_layer(l_0_all=l_0_all)
+
 
 
     @staticmethod

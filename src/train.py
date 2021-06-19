@@ -36,12 +36,16 @@ def my_model_fn(features, labels, mode, params):
     if type(features) == tf.Tensor:
         sparse_feat = features
         dense_feat = None
-    else:
-        if type(features) == dict:
-            sparse_feat = features['sparse_feat']
-            dense_feat = features['dense_feat'] if 'dense_feat' in features else None
-        else:
+        seq_feat = None
+    elif type(features) == tuple:
+        if len(features) == 2:
             sparse_feat, dense_feat = features
+        else:
+            sparse_feat, dense_feat, seq_feat = features
+    else: # 用于模型导出
+        sparse_feat = features['sparse_feat']
+        dense_feat = features['dense_feat'] if 'dense_feat' in features else None
+        seq_feat = features['seq_feat'] if 'seq_feat' in features else None
 
     y_label = labels
     loss = None

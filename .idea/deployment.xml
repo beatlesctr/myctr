@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" serverName="luban@10.186.4.112:8022" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="luban@10.186.4.112:8022">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/myctr" local="$PROJECT_DIR$" web="/" />
+            <mapping local="" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+  </component>
+</project>
