@@ -28,3 +28,9 @@ a_t = tuple(a)
 print(a_t)
 
 print('a %d'%(1))
+
+import tensorflow as tf
+x = tf.placeholder(dtype=tf.int32, shape=[-1, 2], name='x')
+xx = tf.fill(dims=tf.shape(x), value="a")
+sess = tf.Session()
+sess.run(xx)
