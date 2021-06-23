@@ -69,6 +69,7 @@ class DeepFMAttention():
         return tf.where(tf.equal(x=seq_feat, y=mynull), x=zeros, y=ones)
 
     def __attention_layer(self, cur_item_feat, seq_feat):
+
         seq_feat = tf.reshape(tensor=seq_feat, shape=[-1, self._feat_config.max_seq_len, self._feat_config.q_cell_size])
         # attention part
         cur_item_feat_seq, dk = tf.expand_dims(input=cur_item_feat, axis=1)
